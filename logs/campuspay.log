@@ -1,0 +1,17 @@
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger audit
+INFO: [AUDIT] PAYMENT SUCCESS | student=S003 category=HACKATHON_FEE amount=500 txnId=32
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger warning
+WARNING: Payment menu reported failure: Student not found: ZZZ999
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger warning
+WARNING: Payment menu reported failure: Invalid amount
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger warning
+WARNING: Payment menu reported failure: Invalid amount
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger warning
+WARNING: Payment menu reported failure: Unknown payment category: FOOD
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger rollback
+WARNING: [ROLLBACK] Payment rolled back (insufficient balance) for student S007
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger paymentFailure
+SEVERE: [PAYMENT-FAILURE] student=S007 amount=5000 reason=Insufficient balance for payment of 5000
+Jun 03, 2026 4:36:33 PM com.campus.util.Logger warning
+WARNING: Payment menu reported failure: Insufficient balance for payment of 5000
+2026-06-03 17:21:34 [com.campus.Main.main()] INFO  c.c.service.impl.PaymentServiceImpl - [AUDIT] PAYMENT SUCCESS | student=S003 category=WORKSHOP_FEE amount=250 txnId=35
