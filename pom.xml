@@ -13,7 +13,7 @@
     <description>Campus Digital Payment &amp; Expense Management Platform</description>
 
     <properties>
-        <maven.compiler.release>25</maven.compiler.release>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <slf4j.version>2.0.13</slf4j.version>
