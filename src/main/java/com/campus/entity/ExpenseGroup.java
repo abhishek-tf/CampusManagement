@@ -1,10 +1,14 @@
 package com.campus.entity;
 
-import lombok.*;
 import java.time.LocalDateTime;
 
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+import lombok.ToString;
+
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(exclude = {"createdAt", "updatedAt"})

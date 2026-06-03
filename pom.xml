@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.campus</groupId>
+    <artifactId>campus-payment-platform</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>Campus Payment Platform</name>
+    <description>Campus Digital Payment &amp; Expense Management Platform</description>
+
+    <properties>
+        <maven.compiler.release>25</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <slf4j.version>2.0.13</slf4j.version>
+        <logback.version>1.5.6</logback.version>
+        <lombok.version>1.18.46</lombok.version>
+        <mysql.version>8.0.30</mysql.version>
+    </properties>
+
+    <dependencies>
+        <!-- Logging facade -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- Logback implementation (pulls in logback-core transitively) -->
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+        </dependency>
+
+        <!-- Lombok (compile-time only) -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- MySQL JDBC driver -->
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>campus-payment-platform</finalName>
+        <plugins>
+            <!-- Compiler: enable Lombok annotation processing on JDK 23+ -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+
+            <!-- Run with: mvn exec:java -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <mainClass>com.campus.Main</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
