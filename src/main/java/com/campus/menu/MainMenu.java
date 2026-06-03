@@ -1,5 +1,7 @@
 package com.campus.menu;
 
+import com.campus.config.AppConfig;
+
 import java.util.Scanner;
 
 public class MainMenu {
@@ -38,10 +40,13 @@ public class MainMenu {
     }
 
     private void handleStudentMenu() {
-        System.out.println("\n--- Student Management ---");
-        System.out.println("1. Register Student");
-        System.out.println("2. View Student");
-        System.out.print("Choice: ");
+        // Built lazily: AppConfig needs the DataSource (supplied by the DB-connection
+        // module) before a service can be created. If it isn't wired yet, fail soft.
+        try {
+            new StudentMenu(AppConfig.getStudentService(), scanner).show();
+        } catch (IllegalStateException e) {
+            System.out.println("Student module unavailable: " + e.getMessage());
+        }
     }
 
     private void handleWalletMenu() {

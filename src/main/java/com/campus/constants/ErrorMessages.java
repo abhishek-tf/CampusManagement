@@ -2,6 +2,14 @@ package com.campus.constants;
 
 public class ErrorMessages {
     public static final String STUDENT_NOT_FOUND = "Student not found";
+    // --- Student module messages (kept here so no message is hardcoded in services) ---
+    public static final String STUDENT_ALREADY_EXISTS = "A student with this email already exists";
+    public static final String INVALID_STUDENT_DATA = "Student data is missing or invalid";
+    public static final String INVALID_NAME = "Name is required";
+    public static final String INVALID_EMAIL = "A valid email is required";
+    public static final String INVALID_DEPARTMENT = "Department is required";
+    public static final String INVALID_PHONE = "Phone must be 10 digits";
+    public static final String STUDENT_ID_REQUIRED = "Student id is required";
     public static final String INSUFFICIENT_BALANCE = "Insufficient balance";
     public static final String INVALID_AMOUNT = "Invalid amount";
     public static final String DAILY_LIMIT_EXCEEDED = "Daily limit exceeded";
