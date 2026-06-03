@@ -1,17 +1,18 @@
 package com.campus.exception;
 
 /**
- * Wraps low-level SQLExceptions thrown by the repository layer.
+ * Unchecked wrapper for low-level JDBC {@link java.sql.SQLException}s thrown by the
+ * repository layer.
  *
- * WHY  : A DB failure (connection dropped, constraint error) is an
- *        infrastructure problem, NOT a business case — so it is unchecked
- *        and does not pollute every repository signature with `throws SQLException`.
- *        The original SQLException is preserved as the cause for diagnostics.
- * HOW  : Extends RuntimeException; the repository logs the technical detail
- *        via Logger and rethrows this with a user-neutral message
- *        (ErrorMessages.DATABASE_ERROR).
- * USED BY : StudentRepositoryImpl (raised on any SQLException),
- *           AppConfig / callers (propagated; surfaced as "Database error").
+ * <p>WHAT: A RuntimeException the repositories throw instead of leaking SQLException.
+ * WHY:  An UNCHECKED type keeps SQL plumbing out of repository and service method
+ *       signatures — repositories don't need {@code throws SQLException} on every method, and
+ *       unrelated callers (Fraud, Wallet, Student services) don't have to declare it. The
+ *       service layer still catches it where it manages a transaction, to translate it into a
+ *       business exception (PaymentProcessingException) and trigger rollback. Using a
+ *       business (checked) exception here would force throws-clauses across the whole codebase.
+ * HOW:  Always constructed with the originating SQLException as the cause so the stack trace
+ *       and SQL state are retained for diagnostics.</p>
  */
 public class DataAccessException extends RuntimeException {
     public DataAccessException(String message, Throwable cause) {
