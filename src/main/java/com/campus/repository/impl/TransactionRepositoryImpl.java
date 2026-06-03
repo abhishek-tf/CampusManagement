@@ -119,4 +119,29 @@ public class TransactionRepositoryImpl implements ITransactionRepository {
         transaction.setCreatedAt(createdAt != null ? createdAt.toLocalDateTime() : null);
         return transaction;
     }
+
+    /**
+     * WHAT: Maps a DB txn_type string to the enum, returning null if no constant matches.
+     * WHY:  The transaction table may legitimately contain types this module's enum does not
+     *       model (e.g. legacy DEPOSIT/WITHDRAW); tolerating them avoids throwing while reading
+     *       unrelated rows, chosen over a hard valueOf() that would crash on any unknown value.
+     */
+    private TransactionType parseType(String value) {
+        for (TransactionType t : TransactionType.values()) {
+            if (t.name().equals(value)) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    // WHY: same tolerant approach for status, for the same robustness reason as parseType.
+    private TransactionStatus parseStatus(String value) {
+        for (TransactionStatus s : TransactionStatus.values()) {
+            if (s.name().equals(value)) {
+                return s;
+            }
+        }
+        return null;
+    }
 }
