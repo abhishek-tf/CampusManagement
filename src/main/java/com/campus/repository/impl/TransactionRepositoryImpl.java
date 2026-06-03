@@ -1,159 +1,123 @@
 package com.campus.repository.impl;
 
-import com.campus.config.AppConfig;
-import com.campus.entity.TransactionHistory;
-import com.campus.enums.TransactionStatus;
-import com.campus.enums.TransactionType;
-import com.campus.exception.DataAccessException;
+import com.campus.constants.ErrorMessages;
+import com.campus.entity.Transaction;
 import com.campus.repository.interfaces.ITransactionRepository;
+import com.campus.util.DBConnection;
+import com.campus.util.Logger;
 
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * JDBC repository for the {@code transaction} table. SQL only — no business rules.
+ * JDBC repository for the {@code transaction} table.
  *
- * <p>WHAT: Reads/writes transaction rows; supports both standalone and transaction-enlisted writes.
- * WHY:  Keeps the audit backbone's persistence isolated from business logic.
- * HOW:  Generated-key retrieval returns the new txn_id so the caller can link a campus_payment.</p>
+ * <p>Pure data access only — no business rules. Each method opens a fresh
+ * connection via {@link DBConnection} and closes it through try-with-resources.</p>
  */
 public class TransactionRepositoryImpl implements ITransactionRepository {
 
-    // WHY: single shared column list keeps the SELECTs consistent (DRY).
-    private static final String COLUMNS =
-            "txn_id, wallet_id, txn_type, amount, status, failure_reason, created_at";
+    private static final String INSERT_SQL =
+            "INSERT INTO transaction (wallet_id, txn_type, amount, status, failure_reason, created_at) " +
+            "VALUES (?, ?, ?, ?, ?, ?)";
+
+    private static final String SELECT_BY_ID =
+            "SELECT * FROM transaction WHERE txn_id = ?";
+
+    private static final String SELECT_BY_WALLET =
+            "SELECT * FROM transaction WHERE wallet_id = ? ORDER BY created_at DESC, txn_id DESC";
+
+    private static final String SELECT_ALL =
+            "SELECT * FROM transaction ORDER BY created_at DESC, txn_id DESC";
 
     @Override
-    public void save(TransactionHistory transaction) {
-        // WHAT: Standalone save — opens its own connection (autocommit on).
-        // WHY:  For callers that just need to persist one transaction outside a larger unit of work.
-        // HOW:  Delegates to insert() to avoid duplicating the INSERT SQL (DRY), then records the id.
-        try (Connection conn = AppConfig.getConnection()) {
-            long id = insert(conn, transaction);
-            transaction.setTxnId(id);
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to save transaction", e);
-        }
-    }
+    public void save(Transaction transaction) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(INSERT_SQL, Statement.RETURN_GENERATED_KEYS)) {
 
-    @Override
-    public Optional<TransactionHistory> findById(Long transactionId) {
-        String sql = "SELECT " + COLUMNS + " FROM transaction WHERE txn_id = ?";
-        try (Connection conn = AppConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, transactionId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(map(rs)) : Optional.empty();
-            }
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to find transaction " + transactionId, e);
-        }
-    }
-
-    @Override
-    public List<TransactionHistory> findByStudentId(String studentId) {
-        // WHAT: Resolve a student's transactions by JOINing through the wallet.
-        // WHY:  The transaction table stores wallet_id, not student_id, so the student link must
-        //       be made via wallet.student_id — modelling the schema's supertype/subtype design.
-        String sql = "SELECT t.txn_id, t.wallet_id, t.txn_type, t.amount, t.status, t.failure_reason, t.created_at "
-                + "FROM transaction t JOIN wallet w ON t.wallet_id = w.wallet_id WHERE w.student_id = ?";
-        List<TransactionHistory> list = new ArrayList<>();
-        try (Connection conn = AppConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            // WHY: bind studentId directly (String) — no String.valueOf conversion is needed now
-            //      that student identity is consistently String across the module.
-            ps.setString(1, studentId);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    list.add(map(rs));
-                }
-            }
-            return list;
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to find transactions for student " + studentId, e);
-        }
-    }
-
-    @Override
-    public List<TransactionHistory> findAll() {
-        String sql = "SELECT " + COLUMNS + " FROM transaction";
-        List<TransactionHistory> list = new ArrayList<>();
-        try (Connection conn = AppConfig.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                list.add(map(rs));
-            }
-            return list;
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to list transactions", e);
-        }
-    }
-
-    @Override
-    public long insert(Connection conn, TransactionHistory txn) {
-        // WHAT: Insert the writable columns; txn_id and created_at are DB-generated.
-        String sql = "INSERT INTO transaction (wallet_id, txn_type, amount, status, failure_reason) "
-                + "VALUES (?, ?, ?, ?, ?)";
-        // WHY no try-with-resources on conn: this enlists in the caller's transaction; only the
-        //     statement is closed here. RETURN_GENERATED_KEYS yields the new txn_id.
-        try (PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            ps.setLong(1, txn.getWalletId());
-            // WHY .name(): store the enum's stable name, matching the txn_type CHECK values.
-            ps.setString(2, txn.getTxnType().name());
-            ps.setBigDecimal(3, txn.getAmount());
-            ps.setString(4, txn.getStatus().name());
-            // WHY: failure_reason is null for SUCCESS rows and a message for FAILED rows.
-            ps.setString(5, txn.getFailureReason());
+            ps.setLong(1, transaction.getWalletId());
+            ps.setString(2, transaction.getTxnType());
+            ps.setBigDecimal(3, BigDecimal.valueOf(transaction.getAmount()));
+            ps.setString(4, transaction.getStatus());
+            ps.setString(5, transaction.getFailureReason());
+            ps.setTimestamp(6, Timestamp.valueOf(transaction.getCreatedAt()));
             ps.executeUpdate();
+
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
-                    // WHAT: Return the generated id so the campus_payment can reference it.
-                    return keys.getLong(1);
+                    transaction.setTxnId(keys.getLong(1));
                 }
-                // WHY: A missing generated key means the insert did not behave as expected;
-                //      fail loudly rather than return a bogus id that would corrupt the FK link.
-                throw new DataAccessException("Transaction insert returned no generated key", null);
             }
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to insert transaction", e);
+            Logger.error(ErrorMessages.DATABASE_ERROR + " while saving transaction", e);
+            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
         }
     }
 
     @Override
-    public void updateStatus(Connection conn, long txnId, TransactionStatus status, String failureReason) {
-        // WHAT: Update a transaction's status/reason within the caller's transaction.
-        // WHY:  Lets a flow flip a row to FAILED (with a reason) atomically with related changes.
-        String sql = "UPDATE transaction SET status = ?, failure_reason = ? WHERE txn_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, status.name());
-            ps.setString(2, failureReason);
-            ps.setLong(3, txnId);
-            ps.executeUpdate();
+    public Optional<Transaction> findById(Long txnId) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_BY_ID)) {
+
+            ps.setLong(1, txnId);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
+            }
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to update transaction " + txnId, e);
+            Logger.error(ErrorMessages.DATABASE_ERROR + " while finding transaction " + txnId, e);
+            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
         }
     }
 
-    /**
-     * WHAT: Maps the current ResultSet row to a TransactionHistory.
-     * WHY:  One place for row->entity conversion (DRY) used by all reads.
-     * HOW:  Enum columns are parsed tolerantly (see parseType/parseStatus) and the timestamp is
-     *       converted null-safely.
-     */
-    private TransactionHistory map(ResultSet rs) throws SQLException {
+    @Override
+    public List<Transaction> findByWalletId(Long walletId) {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_BY_WALLET)) {
+
+            ps.setLong(1, walletId);
+            return mapRows(ps);
+        } catch (SQLException e) {
+            Logger.error(ErrorMessages.DATABASE_ERROR + " while listing wallet " + walletId, e);
+            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
+        }
+    }
+
+    @Override
+    public List<Transaction> findAll() {
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(SELECT_ALL)) {
+
+            return mapRows(ps);
+        } catch (SQLException e) {
+            Logger.error(ErrorMessages.DATABASE_ERROR + " while listing transactions", e);
+            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
+        }
+    }
+
+    private List<Transaction> mapRows(PreparedStatement ps) throws SQLException {
+        List<Transaction> transactions = new ArrayList<>();
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                transactions.add(mapRow(rs));
+            }
+        }
+        return transactions;
+    }
+
+    private Transaction mapRow(ResultSet rs) throws SQLException {
+        Transaction transaction = new Transaction();
+        transaction.setTxnId(rs.getLong("txn_id"));
+        transaction.setWalletId(rs.getLong("wallet_id"));
+        transaction.setTxnType(rs.getString("txn_type"));
+        transaction.setAmount(rs.getDouble("amount"));
+        transaction.setStatus(rs.getString("status"));
+        transaction.setFailureReason(rs.getString("failure_reason"));
         Timestamp createdAt = rs.getTimestamp("created_at");
-        return TransactionHistory.builder()
-                .txnId(rs.getLong("txn_id"))
-                .walletId(rs.getLong("wallet_id"))
-                .txnType(parseType(rs.getString("txn_type")))
-                .amount(rs.getBigDecimal("amount"))
-                .status(parseStatus(rs.getString("status")))
-                .failureReason(rs.getString("failure_reason"))
-                .createdAt(createdAt == null ? null : createdAt.toLocalDateTime())
-                .build();
+        transaction.setCreatedAt(createdAt != null ? createdAt.toLocalDateTime() : null);
+        return transaction;
     }
 
     /**
