@@ -36,8 +36,8 @@ public class Wallet {
     /** wallet_id BIGINT PK (DB-generated). */
     private Long walletId;
 
-    /** student_id — owner of the wallet; one wallet per student (UNIQUE in schema). */
-    private Long studentId;
+    /** student_id VARCHAR(20) — owner of the wallet; one wallet per student (UNIQUE in schema). */
+    private String studentId;
 
     /** balance DECIMAL(12,2) — current spendable amount. */
     private BigDecimal balance;

@@ -30,7 +30,7 @@ import java.time.LocalDate;
 public class WalletDTO {
 
     private final Long walletId;
-    private final Long studentId;
+    private final String studentId;
     private final BigDecimal balance;
     private final BigDecimal dailyTransferUsed;
     private final BigDecimal dailyTransferLimit;

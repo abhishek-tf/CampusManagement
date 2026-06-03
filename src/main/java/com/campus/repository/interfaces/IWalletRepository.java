@@ -1,37 +1,47 @@
 package com.campus.repository.interfaces;
 
-import com.campus.entity.Wallet;
+import java.math.BigDecimal;
 import java.sql.Connection;
-import java.util.Optional;
+import java.sql.SQLException;
 import java.util.List;
+import java.util.Optional;
+
+import com.campus.entity.Wallet;
 
 /**
- * Persistence contract for the {@code wallet} table.
+ * Persistence operations for the {@code wallet} table, plus the {@code transaction}
+ * / {@code transfer_transaction} writes that every wallet money-movement must
+ * record (schema.sql: "every money movement is one row in transaction").
  *
- * <p>WHAT: SQL operations over wallets, including transaction-aware variants for payments.
- * WHY:  Interface for DIP; SQL-only for SRP (balance arithmetic and limit rules belong to the
- *       service, not here).
- * HOW:  The two Connection-taking methods exist specifically so a payment can lock the wallet
- *       and debit it inside the service's open transaction.</p>
+ * <p>Every method takes the active {@link Connection} so the service layer owns
+ * the transaction boundary (commit/rollback). Implementations perform SQL only -
+ * no validation, no balance maths, no business rules.</p>
  */
 public interface IWalletRepository {
 
-    void save(Wallet wallet);
-    Optional<Wallet> findById(Long walletId);
-    Optional<Wallet> findByStudentId(String studentId);
-    List<Wallet> findAll();
-    void update(Wallet wallet);
+    /** Inserts a wallet row and returns its generated {@code wallet_id}. */
+    long save(Connection conn, Wallet wallet) throws SQLException;
 
-    // --- transactional variants: participate in a caller-managed JDBC transaction ---
+    Optional<Wallet> findByStudentId(Connection conn, String studentId) throws SQLException;
+
+    /** Same as {@link #findByStudentId} but locks the row ({@code FOR UPDATE}). */
+    Optional<Wallet> findByStudentIdForUpdate(Connection conn, String studentId) throws SQLException;
+
+    List<Wallet> findAll(Connection conn) throws SQLException;
+
+    /** Persists the mutable wallet state (balance, daily counter, updated_at). */
+    void update(Connection conn, Wallet wallet) throws SQLException;
 
     /**
-     * Locks and reads the wallet for a student within the caller's transaction
-     * (SELECT ... FOR UPDATE).
-     * WHY FOR UPDATE: prevents a concurrent payment/transfer from reading the same balance and
-     * double-spending — the row stays locked until the caller commits or rolls back.
+     * Records a money movement in the {@code transaction} table and returns the
+     * generated {@code txn_id}.
+     *
+     * @param txnType one of DEPOSIT | WITHDRAW | TRANSFER | PAYMENT (schema CHECK)
      */
-    Optional<Wallet> findByStudentId(Connection conn, String studentId);
+    long insertTransaction(Connection conn, long walletId, String txnType,
+                           BigDecimal amount) throws SQLException;
 
-    /** Sets the wallet balance within the caller's transaction (the debit step of a payment). */
-    void updateBalance(Connection conn, Long walletId, java.math.BigDecimal newBalance);
+    /** Records the {@code transfer_transaction} detail for a TRANSFER txn. */
+    void insertTransferDetail(Connection conn, long txnId, String fromStudentId,
+                              String toStudentId) throws SQLException;
 }

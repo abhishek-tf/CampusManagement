@@ -1,38 +1,29 @@
 package com.campus.service.interfaces;
 
-import com.campus.entity.CampusPayment;
-import com.campus.exception.CampusPaymentException;
 import java.math.BigDecimal;
 import java.util.List;
 
+import com.campus.entity.CampusPayment;
+import com.campus.exception.CampusPaymentException;
+
 /**
- * Campus Payments service contract (business layer).
- *
- * <p>WHAT: The operations the rest of the app may call to make and review campus payments.
- * WHY:  Depending on this interface (not the impl) follows the Dependency Inversion Principle
- *       and Interface Segregation — callers see only payment operations. It is intentionally
- *       small (two methods) rather than a god-interface.
- * HOW:  Methods declare {@code throws CampusPaymentException} so every business failure mode
- *       (invalid amount, student/wallet missing, insufficient balance, processing error) is a
- *       checked outcome the caller must handle.</p>
+ * Business contract for campus payments (canteen, library fine, hackathon fee,
+ * workshop fee, hostel fee). A payment debits the student's wallet and records
+ * both a {@code transaction} and a {@code campus_payment} row atomically.
  */
 public interface IPaymentService {
 
     /**
-     * Processes a campus fee payment for a student: validates the student, wallet and amount,
-     * creates a transaction + campus_payment, and debits the wallet — atomically.
+     * Pays a campus fee from the student's wallet.
      *
-     * @param studentId the paying student's id (matches student.student_id)
-     * @param category  the payment category (a {@link com.campus.enums.PaymentCategory} name)
-     * @param amount    the amount to pay
-     * @throws CampusPaymentException if validation fails or the payment cannot be processed
+     * @param studentId the paying student
+     * @param category  one of the {@link com.campus.enums.PaymentCategory} names
+     * @param amount    positive amount to pay
+     * @throws CampusPaymentException if the input is invalid, the category is
+     *         unknown, the wallet is missing, or the balance is insufficient
      */
     void processPayment(String studentId, String category, BigDecimal amount) throws CampusPaymentException;
 
-    /**
-     * Payment history for a student, most recent first.
-     *
-     * @throws CampusPaymentException if the student id is not usable
-     */
+    /** @return the student's payment history (most recent first). */
     List<CampusPayment> getPaymentHistory(String studentId) throws CampusPaymentException;
 }
