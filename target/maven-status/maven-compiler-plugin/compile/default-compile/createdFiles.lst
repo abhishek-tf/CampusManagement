@@ -24,6 +24,7 @@ com/campus/entity/Student$StudentBuilder.class
 com/campus/service/interfaces/IPaymentService.class
 com/campus/entity/GroupMember.class
 com/campus/entity/ExpenseSplits$ExpenseSplitsBuilder.class
+com/campus/service/impl/ExpenseServiceImpl$1.class
 com/campus/entity/ExpenseGroup.class
 com/campus/entity/CampusPayment$CampusPaymentBuilder.class
 com/campus/util/ValidationUtil.class
@@ -45,7 +46,6 @@ com/campus/enums/TransactionType.class
 com/campus/enums/PaymentCategory.class
 com/campus/exception/InvalidAmountException.class
 com/campus/exception/CampusPaymentException.class
-com/campus/entity/ExpenseGroup$ExpenseGroupBuilder.class
 com/campus/entity/ExpenseSplits.class
 com/campus/repository/impl/TransactionRepositoryImpl.class
 com/campus/exception/DailyLimitExceededException.class

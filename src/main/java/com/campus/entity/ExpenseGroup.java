@@ -3,22 +3,21 @@ package com.campus.entity;
 import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
 
+/**
+ * Maps the {@code expense_group} table: a named group of students who share
+ * expenses. {@code createdBy} is the {@code student_id} (VARCHAR) of the creator.
+ */
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(exclude = {"createdAt", "updatedAt"})
-@ToString(exclude = {"createdAt", "updatedAt"})
 public class ExpenseGroup {
     private Long groupId;
-    private Long createdByStudentId;
     private String groupName;
-    private String description;
-    private Boolean isActive;
+    private String createdBy;
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 }
