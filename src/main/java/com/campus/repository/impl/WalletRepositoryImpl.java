@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Optional;
 
 import com.campus.entity.Wallet;
-import com.campus.exception.DataAccessException;
 import com.campus.repository.interfaces.IWalletRepository;
 
 /**
@@ -156,37 +155,5 @@ public class WalletRepositoryImpl implements IWalletRepository {
 
     private Date toSqlDate(LocalDate date) {
         return date == null ? null : Date.valueOf(date);
-    }
-
-    /**
-     * WHAT: Maps the current row to a Wallet.
-     * WHY:  One conversion point for all wallet reads.
-     * HOW:  DATE -> LocalDate and DATETIME -> LocalDateTime conversions are null-safe.
-     */
-    private Wallet map(ResultSet rs) throws SQLException {
-        Date resetDate = rs.getDate("transfer_reset_date");
-        Timestamp updatedAt = rs.getTimestamp("updated_at");
-        return Wallet.builder()
-                .walletId(rs.getLong("wallet_id"))
-                .studentId(rs.getString("student_id"))
-                .balance(rs.getBigDecimal("balance"))
-                .dailyTransferSpent(rs.getBigDecimal("daily_transfer_used"))
-                .transferResetDate(resetDate == null ? null : resetDate.toLocalDate())
-                .maxBalanceCap(rs.getBigDecimal("max_balance_cap"))
-                .dailyTransferLimit(rs.getBigDecimal("daily_transfer_limit"))
-                .updatedAt(updatedAt == null ? null : updatedAt.toLocalDateTime())
-                .build();
-    }
-
-    // WHAT: Null-coalesce a money value to ZERO.
-    // WHY:  Wallet money columns are NOT NULL; this guards inserts/updates against nulls.
-    private static BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    // WHAT: Convert LocalDate to java.sql.Date, preserving null.
-    // WHY:  PreparedStatement needs java.sql.Date for a DATE column; null maps to SQL NULL.
-    private static Date toDate(LocalDate value) {
-        return value == null ? null : Date.valueOf(value);
     }
 }
