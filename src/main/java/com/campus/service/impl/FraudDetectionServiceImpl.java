@@ -1,27 +1,32 @@
 package com.campus.service.impl;
 
 import com.campus.entity.FraudFlag;
-import com.campus.entity.TransactionHistory;
+import com.campus.entity.Transaction;
+import com.campus.entity.Wallet;
 import com.campus.enums.TransactionStatus;
 import com.campus.exception.CampusPaymentException;
 import com.campus.exception.FraudDetectedException;
 import com.campus.repository.interfaces.IFraudRepository;
 import com.campus.repository.interfaces.ITransactionRepository;
+import com.campus.repository.interfaces.IWalletRepository;
 import com.campus.service.interfaces.IFraudDetectionService;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 
 public class FraudDetectionServiceImpl implements IFraudDetectionService {
     private final IFraudRepository fraudRepository;
     private final ITransactionRepository transactionRepository;
+    private final IWalletRepository walletRepository;
     private static final int FRAUD_THRESHOLD = 10;
     private static final int TIME_WINDOW_MINUTES = 5;
 
-    public FraudDetectionServiceImpl(IFraudRepository fraudRepository, 
-                                   ITransactionRepository transactionRepository) {
+    public FraudDetectionServiceImpl(IFraudRepository fraudRepository,
+                                   ITransactionRepository transactionRepository,
+                                   IWalletRepository walletRepository) {
         this.fraudRepository = fraudRepository;
         this.transactionRepository = transactionRepository;
+        this.walletRepository = walletRepository;
     }
 
     @Override
@@ -30,7 +35,10 @@ public class FraudDetectionServiceImpl implements IFraudDetectionService {
             throw new CampusPaymentException("Invalid student ID");
         }
 
-        List<TransactionHistory> recentTransactions = transactionRepository.findByStudentId(studentId);
+        List<Transaction> recentTransactions = walletRepository.findByStudentId(studentId)
+                .map(Wallet::getWalletId)
+                .map(transactionRepository::findByWalletId)
+                .orElse(Collections.emptyList());
         LocalDateTime fiveMinutesAgo = LocalDateTime.now().minusMinutes(TIME_WINDOW_MINUTES);
 
         long suspiciousCount = recentTransactions.stream()

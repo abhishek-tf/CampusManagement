@@ -1,8 +1,8 @@
 package com.campus.enums;
 
 public enum TransactionType {
-    TOPUP("Wallet Top-up"),
-    WITHDRAWAL("Wallet Withdrawal"),
+    DEPOSIT("Wallet Deposit"),
+    WITHDRAW("Wallet Withdrawal"),
     TRANSFER("P2P Transfer"),
     PAYMENT("Campus Payment");
 
