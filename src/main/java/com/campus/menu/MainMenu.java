@@ -1,18 +1,14 @@
 package com.campus.menu;
 
-<<<<<<< HEAD
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Scanner;
+
+import com.campus.config.AppConfig;
 import com.campus.entity.Transaction;
 import com.campus.exception.CampusPaymentException;
 import com.campus.service.interfaces.IReportService;
 import com.campus.service.interfaces.ITransactionService;
-
-import java.math.BigDecimal;
-import java.util.List;
-=======
-import com.campus.config.AppConfig;
-
->>>>>>> origin/main
-import java.util.Scanner;
 
 public class MainMenu {
     private final Scanner scanner = new Scanner(System.in);
@@ -98,8 +94,11 @@ public class MainMenu {
             System.out.println("\n--- Transaction History & Reports ---");
             System.out.println("1. Record Transaction");
             System.out.println("2. View Wallet Transaction History");
-            System.out.println("3. View Reports");
-            System.out.println("4. Back");
+            System.out.println("3. Total Spend");
+            System.out.println("4. Top Spenders");
+            System.out.println("5. Department-wise Spend");
+            System.out.println("6. Monthly Summary");
+            System.out.println("7. Back");
             String choice = prompt("Choice: ");
             if (choice == null) {
                 return;
@@ -108,8 +107,11 @@ public class MainMenu {
             switch (choice) {
                 case "1" -> recordTransaction();
                 case "2" -> viewWalletHistory();
-                case "3" -> viewReports();
-                case "4" -> back = true;
+                case "3" -> showTotalSpend();
+                case "4" -> showTopSpenders();
+                case "5" -> showDepartmentWiseSpend();
+                case "6" -> showMonthlySummary();
+                case "7" -> back = true;
                 default -> System.out.println("Invalid choice");
             }
         }
@@ -156,20 +158,27 @@ public class MainMenu {
         }
     }
 
-    private void viewReports() {
+    private void showTotalSpend() {
         System.out.println("\nTotal Spend: " + reportService.getTotalSpend());
+    }
 
+    private void showTopSpenders() {
         System.out.println("\nTop 5 Spenders:");
         reportService.getTopSpenders(5).forEach(s ->
                 System.out.printf("  %s %s (%s) - %s across %d txns%n",
                         s.getStudentId(), s.getStudentName(), s.getDepartment(),
                         s.getTotalSpent(), s.getTransactionCount()));
+    }
 
+    private void showDepartmentWiseSpend() {
         System.out.println("\nDepartment-wise Spend:");
         reportService.getDepartmentWiseSpend().forEach(d ->
                 System.out.printf("  %s - %s (%d txns)%n",
                         d.getDepartment(), d.getTotalSpent(), d.getTransactionCount()));
+    }
 
+    private void 
+    showMonthlySummary() {
         System.out.println("\nMonthly Summary:");
         reportService.getMonthlySummaries().forEach(m ->
                 System.out.printf("  %d-%02d - %s (%d txns)%n",
