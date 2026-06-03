@@ -9,4 +9,12 @@ public class ErrorMessages {
     public static final String INVALID_INPUT = "Invalid input";
     public static final String DATABASE_ERROR = "Database error occurred";
     public static final String OPERATION_FAILED = "Operation failed";
+
+    // Expense sharing
+    public static final String GROUP_NOT_FOUND = "Expense group not found";
+    public static final String EXPENSE_NOT_FOUND = "Expense not found";
+    public static final String SPLIT_NOT_FOUND = "Expense split not found";
+    public static final String NOT_GROUP_MEMBER = "Student is not a member of this group";
+    public static final String ALREADY_SETTLED = "Expense split is already settled";
+    public static final String INVALID_SPLIT = "Split amounts do not add up to the total";
 }

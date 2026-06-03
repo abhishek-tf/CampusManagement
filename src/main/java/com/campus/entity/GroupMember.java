@@ -1,16 +1,22 @@
 package com.campus.entity;
 
-import lombok.*;
+import java.time.LocalDateTime;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+/**
+ * Maps the {@code group_member} table: membership of a student in a group.
+ * The natural key is the ({@code groupId}, {@code studentId}) pair.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode
-@ToString
 public class GroupMember {
-    private Long memberExpenseId;
     private Long groupId;
-    private Long studentId;
-    private Boolean isPaid;
+    private String studentId;
+    private LocalDateTime joinedAt;
 }
