@@ -37,7 +37,7 @@ public interface IWalletService {
      * @return the created wallet as a DTO (including its generated id)
      * @throws CampusPaymentException if the id is invalid
      */
-    WalletDTO createWallet(Long studentId) throws CampusPaymentException;
+    WalletDTO createWallet(String studentId) throws CampusPaymentException;
 
     /**
      * Credits money into a wallet (e.g. cash/online top-up).
@@ -45,7 +45,7 @@ public interface IWalletService {
      * @throws CampusPaymentException if the amount is invalid, the wallet is
      *         missing, or the credit would exceed the wallet's balance cap
      */
-    void topupWallet(Long studentId, BigDecimal amount) throws CampusPaymentException;
+    void topupWallet(String studentId, BigDecimal amount) throws CampusPaymentException;
 
     /**
      * Debits money from a wallet.
@@ -53,7 +53,7 @@ public interface IWalletService {
      * @throws CampusPaymentException if the amount is invalid, the wallet is
      *         missing, or the balance is insufficient
      */
-    void withdrawFromWallet(Long studentId, BigDecimal amount) throws CampusPaymentException;
+    void withdrawFromWallet(String studentId, BigDecimal amount) throws CampusPaymentException;
 
     /**
      * Moves money between two wallets, enforcing the sender's daily transfer
@@ -62,17 +62,17 @@ public interface IWalletService {
      * @throws CampusPaymentException if the amount/limit/balance rules fail or a
      *         wallet is missing
      */
-    void transferMoney(Long fromStudentId, Long toStudentId, BigDecimal amount) throws CampusPaymentException;
+    void transferMoney(String fromStudentId, String toStudentId, BigDecimal amount) throws CampusPaymentException;
 
     /**
      * @return the current balance of the student's wallet
      * @throws CampusPaymentException if the wallet is missing
      */
-    BigDecimal getBalance(Long studentId) throws CampusPaymentException;
+    BigDecimal getBalance(String studentId) throws CampusPaymentException;
 
     /**
      * @return a read-only snapshot of the student's wallet
      * @throws CampusPaymentException if the wallet is missing
      */
-    WalletDTO getWalletDetails(Long studentId) throws CampusPaymentException;
+    WalletDTO getWalletDetails(String studentId) throws CampusPaymentException;
 }
