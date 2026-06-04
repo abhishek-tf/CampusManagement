@@ -134,8 +134,10 @@ public class ExpenseMenu {
                 System.out.println("No members / expenses for this group.");
                 return;
             }
-            balances.forEach((student, net) -> System.out.printf("  %s : %s (%s)%n",
-                    student, net, net.signum() >= 0 ? "is owed" : "owes"));
+            balances.forEach((student, net) -> {
+                String label = net.signum() == 0 ? "settled up" : (net.signum() > 0 ? "is owed" : "owes");
+                System.out.printf("  %s : %s (%s)%n", student, net, label);
+            });
         } catch (CampusPaymentException e) {
             System.out.println("Could not load balances: " + e.getMessage());
         }

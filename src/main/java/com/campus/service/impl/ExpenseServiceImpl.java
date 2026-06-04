@@ -189,21 +189,32 @@ public class ExpenseServiceImpl implements IExpenseService {
             List<GroupExpense> expenses = expenseRepository.findExpensesByGroupId(conn, groupId);
             List<ExpenseSplits> splits = splitRepository.findByGroupId(conn, groupId);
 
-            // Total fronted by each payer and total share consumed by each debtor.
-            Map<String, BigDecimal> paid = expenses.stream().collect(Collectors.groupingBy(
-                    GroupExpense::getPaidBy,
-                    Collectors.reducing(BigDecimal.ZERO, GroupExpense::getTotalAmount, BigDecimal::add)));
-            Map<String, BigDecimal> owed = splits.stream().collect(Collectors.groupingBy(
-                    ExpenseSplits::getDebtorId,
-                    Collectors.reducing(BigDecimal.ZERO, ExpenseSplits::getShareAmount, BigDecimal::add)));
+            // Each bill's payer is the creditor for that bill's splits.
+            Map<Long, String> payerByExpense = expenses.stream()
+                    .collect(Collectors.toMap(GroupExpense::getExpenseId, GroupExpense::getPaidBy));
 
+            // Seed every member at zero so members with no outstanding dues still show.
             Map<String, BigDecimal> netBalances = new LinkedHashMap<>();
             for (GroupMember member : members) {
-                String id = member.getStudentId();
-                BigDecimal net = paid.getOrDefault(id, BigDecimal.ZERO)
-                        .subtract(owed.getOrDefault(id, BigDecimal.ZERO));
-                netBalances.put(id, net.setScale(2, RoundingMode.HALF_UP));
+                netBalances.put(member.getStudentId(), BigDecimal.ZERO);
             }
+
+            // Only PENDING splits are outstanding: the debtor still owes the payer.
+            // A SETTLED split has already been paid (a wallet transfer moved the money),
+            // so it no longer affects the balance - which is why settling zeroes it out.
+            for (ExpenseSplits split : splits) {
+                if (split.getStatus() != SettlementStatus.PENDING) {
+                    continue;
+                }
+                String debtor = split.getDebtorId();
+                String creditor = payerByExpense.get(split.getExpenseId());
+                BigDecimal amount = split.getShareAmount();
+                netBalances.merge(debtor, amount.negate(), BigDecimal::add);   // debtor owes
+                if (creditor != null) {
+                    netBalances.merge(creditor, amount, BigDecimal::add);       // payer is owed
+                }
+            }
+            netBalances.replaceAll((id, value) -> value.setScale(2, RoundingMode.HALF_UP));
             return netBalances;
         });
     }
