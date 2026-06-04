@@ -39,7 +39,7 @@ import com.campus.util.Tx;
  */
 public class ExpenseServiceImpl implements IExpenseService {
 
-    private static final BigDecimal ONE_CENT = new BigDecimal("0.01");
+    private static final BigDecimal ONE_PAISA = new BigDecimal("0.01");
     private static final BigDecimal HUNDRED = new BigDecimal("100");
 
     private final IExpenseRepository expenseRepository;
@@ -239,13 +239,13 @@ public class ExpenseServiceImpl implements IExpenseService {
     private List<SplitLine> splitEqually(BigDecimal total, List<GroupMember> members) {
         int count = members.size();
         BigDecimal base = total.divide(BigDecimal.valueOf(count), 2, RoundingMode.DOWN);
-        // Spread the rounding remainder one cent at a time over the first members.
-        int extraCents = total.subtract(base.multiply(BigDecimal.valueOf(count)))
+        // Spread the rounding remainder one paisa at a time over the first members.
+        int extraPaise = total.subtract(base.multiply(BigDecimal.valueOf(count)))
                 .movePointRight(2).intValue();
 
         List<SplitLine> lines = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            BigDecimal amount = i < extraCents ? base.add(ONE_CENT) : base;
+            BigDecimal amount = i < extraPaise ? base.add(ONE_PAISA) : base;
             lines.add(new SplitLine(members.get(i).getStudentId(), amount, null));
         }
         return lines;
