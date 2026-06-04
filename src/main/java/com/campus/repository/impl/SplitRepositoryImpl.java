@@ -71,16 +71,6 @@ public class SplitRepositoryImpl implements ISplitRepository {
     }
 
     @Override
-    public List<ExpenseSplits> findByExpenseId(Connection conn, long expenseId) throws SQLException {
-        String sql = "SELECT " + COLUMNS + " FROM expense_split "
-                + "WHERE expense_id = ? ORDER BY split_id";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, expenseId);
-            return mapList(ps);
-        }
-    }
-
-    @Override
     public List<ExpenseSplits> findPendingByDebtor(Connection conn, String debtorId) throws SQLException {
         String sql = "SELECT " + COLUMNS + " FROM expense_split "
                 + "WHERE debtor_id = ? AND status = 'PENDING' ORDER BY split_id";

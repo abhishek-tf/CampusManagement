@@ -10,7 +10,6 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * JDBC repository for the {@code transaction} table.
@@ -24,14 +23,8 @@ public class TransactionRepositoryImpl implements ITransactionRepository {
             "INSERT INTO transaction (wallet_id, txn_type, amount, status, failure_reason, created_at) " +
             "VALUES (?, ?, ?, ?, ?, ?)";
 
-    private static final String SELECT_BY_ID =
-            "SELECT * FROM transaction WHERE txn_id = ?";
-
     private static final String SELECT_BY_WALLET =
             "SELECT * FROM transaction WHERE wallet_id = ? ORDER BY created_at DESC, txn_id DESC";
-
-    private static final String SELECT_ALL =
-            "SELECT * FROM transaction ORDER BY created_at DESC, txn_id DESC";
 
     @Override
     public void save(Transaction transaction) {
@@ -58,21 +51,6 @@ public class TransactionRepositoryImpl implements ITransactionRepository {
     }
 
     @Override
-    public Optional<Transaction> findById(Long txnId) {
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_BY_ID)) {
-
-            ps.setLong(1, txnId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        } catch (SQLException e) {
-            Logger.error(ErrorMessages.DATABASE_ERROR + " while finding transaction " + txnId, e);
-            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
-        }
-    }
-
-    @Override
     public List<Transaction> findByWalletId(Long walletId) {
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(SELECT_BY_WALLET)) {
@@ -85,17 +63,6 @@ public class TransactionRepositoryImpl implements ITransactionRepository {
         }
     }
 
-    @Override
-    public List<Transaction> findAll() {
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(SELECT_ALL)) {
-
-            return mapRows(ps);
-        } catch (SQLException e) {
-            Logger.error(ErrorMessages.DATABASE_ERROR + " while listing transactions", e);
-            throw new RuntimeException(ErrorMessages.DATABASE_ERROR, e);
-        }
-    }
 
     private List<Transaction> mapRows(PreparedStatement ps) throws SQLException {
         List<Transaction> transactions = new ArrayList<>();
@@ -118,30 +85,5 @@ public class TransactionRepositoryImpl implements ITransactionRepository {
         Timestamp createdAt = rs.getTimestamp("created_at");
         transaction.setCreatedAt(createdAt != null ? createdAt.toLocalDateTime() : null);
         return transaction;
-    }
-
-    /**
-     * WHAT: Maps a DB txn_type string to the enum, returning null if no constant matches.
-     * WHY:  The transaction table may legitimately contain types this module's enum does not
-     *       model (e.g. legacy DEPOSIT/WITHDRAW); tolerating them avoids throwing while reading
-     *       unrelated rows, chosen over a hard valueOf() that would crash on any unknown value.
-     */
-    private TransactionType parseType(String value) {
-        for (TransactionType t : TransactionType.values()) {
-            if (t.name().equals(value)) {
-                return t;
-            }
-        }
-        return null;
-    }
-
-    // WHY: same tolerant approach for status, for the same robustness reason as parseType.
-    private TransactionStatus parseStatus(String value) {
-        for (TransactionStatus s : TransactionStatus.values()) {
-            if (s.name().equals(value)) {
-                return s;
-            }
-        }
-        return null;
     }
 }

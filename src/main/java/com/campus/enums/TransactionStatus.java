@@ -3,9 +3,7 @@ package com.campus.enums;
 public enum TransactionStatus {
     PENDING("Transaction pending"),
     SUCCESS("Transaction successful"),
-    FAILED("Transaction failed"),
-    CANCELLED("Transaction cancelled"),
-    REVERSED("Transaction reversed");
+    FAILED("Transaction failed");
 
     private final String description;
 

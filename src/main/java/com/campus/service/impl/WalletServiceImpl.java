@@ -1,37 +1,30 @@
-// Author: Hemanth (JDBC conversion)
 package com.campus.service.impl;
 
 import com.campus.config.AppConfig;
-import com.campus.constants.ErrorMessages;
 import com.campus.dto.WalletDTO;
 import com.campus.entity.Wallet;
 import com.campus.exception.*;
 import com.campus.repository.interfaces.IWalletRepository;
 import com.campus.service.interfaces.IWalletService;
-import com.campus.util.DBConnection;
+import com.campus.util.Logger;
+import com.campus.util.Tx;
 import com.campus.util.ValidationUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.time.LocalDate;
 
 /**
  * Business logic for wallet operations, persisted to MySQL via JDBC.
  *
- * <p>DESIGN: this service owns every transaction boundary. Each money movement
- * (top-up, withdraw, transfer) runs inside a single JDBC transaction that both
- * updates the wallet balance AND records the matching {@code transaction} row
- * (schema.sql: every money movement is one transaction row) - committing together
- * or rolling back entirely. SQL is delegated to {@link IWalletRepository}.</p>
+ * <p>This service owns every transaction boundary through {@link Tx}: each money
+ * movement (top-up, withdraw, transfer) updates the wallet balance AND records
+ * the matching {@code transaction} row (schema.sql: every money movement is one
+ * transaction row) - committing together or rolling back entirely. SQL is
+ * delegated to {@link IWalletRepository}.</p>
  *
  * <p>MONEY: all arithmetic uses {@link BigDecimal} to avoid floating-point error.</p>
  */
 public class WalletServiceImpl implements IWalletService {
-
-    private static final Logger log = LoggerFactory.getLogger(WalletServiceImpl.class);
 
     // Transaction-type codes accepted by the schema's transaction.txn_type CHECK.
     private static final String TXN_DEPOSIT = "DEPOSIT";
@@ -50,7 +43,7 @@ public class WalletServiceImpl implements IWalletService {
             throw new InvalidInputException("Invalid student id for wallet creation");
         }
 
-        return executeInTransaction(conn -> {
+        return Tx.inTransaction(conn -> {
             // Enforce "one wallet per student" (schema UNIQUE) with a clear business
             // error instead of surfacing a duplicate-key SQL failure.
             if (walletRepository.findByStudentId(conn, studentId).isPresent()) {
@@ -68,7 +61,7 @@ public class WalletServiceImpl implements IWalletService {
                     .build();
             walletRepository.save(conn, wallet);
 
-            log.info("Wallet created: walletId={} studentId={}", wallet.getWalletId(), studentId);
+            Logger.info("Wallet created: walletId=" + wallet.getWalletId() + " studentId=" + studentId);
             return WalletDTO.from(wallet);
         });
     }
@@ -77,12 +70,12 @@ public class WalletServiceImpl implements IWalletService {
     public void topupWallet(String studentId, BigDecimal amount) throws CampusPaymentException {
         validateAmount(amount, "top-up");
 
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             Wallet wallet = requireWallet(conn, studentId);
 
             BigDecimal newBalance = wallet.getBalance().add(amount);
             if (newBalance.compareTo(wallet.getMaxBalanceCap()) > 0) {
-                log.warn("Top-up rejected (cap exceeded): studentId={} amount={}", studentId, amount);
+                Logger.warning("Top-up rejected (cap exceeded): studentId=" + studentId + " amount=" + amount);
                 throw new MaxBalanceExceededException(
                         "Top-up would exceed wallet balance cap of " + wallet.getMaxBalanceCap());
             }
@@ -91,7 +84,7 @@ public class WalletServiceImpl implements IWalletService {
             walletRepository.update(conn, wallet);
             walletRepository.insertTransaction(conn, wallet.getWalletId(), TXN_DEPOSIT, amount);
 
-            log.info("Top-up success: studentId={} amount={} newBalance={}", studentId, amount, newBalance);
+            Logger.audit("Top-up: studentId=" + studentId + " amount=" + amount + " newBalance=" + newBalance);
             return null;
         });
     }
@@ -100,12 +93,12 @@ public class WalletServiceImpl implements IWalletService {
     public void withdrawFromWallet(String studentId, BigDecimal amount) throws CampusPaymentException {
         validateAmount(amount, "withdrawal");
 
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             Wallet wallet = requireWallet(conn, studentId);
 
             if (wallet.getBalance().compareTo(amount) < 0) {
-                log.warn("Withdrawal rejected (insufficient funds): studentId={} amount={} balance={}",
-                        studentId, amount, wallet.getBalance());
+                Logger.warning("Withdrawal rejected (insufficient funds): studentId=" + studentId
+                        + " amount=" + amount + " balance=" + wallet.getBalance());
                 throw new InsufficientBalanceException("Insufficient balance for withdrawal");
             }
 
@@ -113,8 +106,8 @@ public class WalletServiceImpl implements IWalletService {
             walletRepository.update(conn, wallet);
             walletRepository.insertTransaction(conn, wallet.getWalletId(), TXN_WITHDRAW, amount);
 
-            log.info("Withdrawal success: studentId={} amount={} newBalance={}",
-                    studentId, amount, wallet.getBalance());
+            Logger.audit("Withdrawal: studentId=" + studentId + " amount=" + amount
+                    + " newBalance=" + wallet.getBalance());
             return null;
         });
     }
@@ -129,7 +122,7 @@ public class WalletServiceImpl implements IWalletService {
             throw new InvalidAmountException("Cannot transfer to the same wallet");
         }
 
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             // Lock both wallets for the duration of the transfer.
             Wallet sender = walletRepository.findByStudentIdForUpdate(conn, fromStudentId)
                     .orElseThrow(() -> new WalletNotFoundException("Sender wallet not found"));
@@ -138,7 +131,7 @@ public class WalletServiceImpl implements IWalletService {
 
             // 1) Sender must have the funds.
             if (sender.getBalance().compareTo(amount) < 0) {
-                log.warn("Transfer rejected (insufficient funds): from={} amount={}", fromStudentId, amount);
+                Logger.warning("Transfer rejected (insufficient funds): from=" + fromStudentId + " amount=" + amount);
                 throw new InsufficientBalanceException("Insufficient balance for transfer");
             }
 
@@ -148,15 +141,15 @@ public class WalletServiceImpl implements IWalletService {
             // 3) Enforce the sender's daily transfer limit.
             BigDecimal usedAfter = sender.getDailyTransferUsed().add(amount);
             if (usedAfter.compareTo(sender.getDailyTransferLimit()) > 0) {
-                log.warn("Transfer rejected (daily limit): from={} usedAfter={} limit={}",
-                        fromStudentId, usedAfter, sender.getDailyTransferLimit());
+                Logger.warning("Transfer rejected (daily limit): from=" + fromStudentId
+                        + " usedAfter=" + usedAfter + " limit=" + sender.getDailyTransferLimit());
                 throw new DailyLimitExceededException("Daily transfer limit exceeded");
             }
 
             // 4) The credit must not overflow the receiver's balance cap.
             BigDecimal receiverNewBalance = receiver.getBalance().add(amount);
             if (receiverNewBalance.compareTo(receiver.getMaxBalanceCap()) > 0) {
-                log.warn("Transfer rejected (receiver cap): to={} amount={}", toStudentId, amount);
+                Logger.warning("Transfer rejected (receiver cap): to=" + toStudentId + " amount=" + amount);
                 throw new MaxBalanceExceededException("Transfer would exceed recipient's balance cap");
             }
 
@@ -171,53 +164,28 @@ public class WalletServiceImpl implements IWalletService {
             long txnId = walletRepository.insertTransaction(conn, sender.getWalletId(), TXN_TRANSFER, amount);
             walletRepository.insertTransferDetail(conn, txnId, fromStudentId, toStudentId);
 
-            log.info("Transfer success: from={} to={} amount={} txnId={}",
-                    fromStudentId, toStudentId, amount, txnId);
+            Logger.audit("Transfer: from=" + fromStudentId + " to=" + toStudentId
+                    + " amount=" + amount + " txnId=" + txnId);
             return null;
         });
     }
 
     @Override
     public BigDecimal getBalance(String studentId) throws CampusPaymentException {
-        return executeInTransaction(conn -> requireWallet(conn, studentId).getBalance());
+        return Tx.inTransaction(conn -> requireWallet(conn, studentId).getBalance());
     }
 
     @Override
     public WalletDTO getWalletDetails(String studentId) throws CampusPaymentException {
-        return executeInTransaction(conn -> WalletDTO.from(requireWallet(conn, studentId)));
+        return Tx.inTransaction(conn -> WalletDTO.from(requireWallet(conn, studentId)));
     }
 
     // ----------------------------------------------------------------------
-    // Transaction template & helpers
+    // Helpers
     // ----------------------------------------------------------------------
 
-    @FunctionalInterface
-    private interface ConnectionWork<T> {
-        T apply(Connection conn) throws SQLException, CampusPaymentException;
-    }
-
-    /** Runs {@code work} in one JDBC transaction: commit on success, rollback on failure. */
-    private <T> T executeInTransaction(ConnectionWork<T> work) throws CampusPaymentException {
-        try (Connection conn = DBConnection.getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                T result = work.apply(conn);
-                conn.commit();
-                return result;
-            } catch (SQLException | CampusPaymentException | RuntimeException e) {
-                conn.rollback();
-                throw e;
-            }
-        } catch (CampusPaymentException e) {
-            throw e;
-        } catch (SQLException e) {
-            log.error("Database error during wallet operation", e);
-            throw new CampusPaymentException(ErrorMessages.DATABASE_ERROR, e);
-        }
-    }
-
-    private Wallet requireWallet(Connection conn, String studentId)
-            throws SQLException, CampusPaymentException {
+    private Wallet requireWallet(java.sql.Connection conn, String studentId)
+            throws java.sql.SQLException, CampusPaymentException {
         return walletRepository.findByStudentIdForUpdate(conn, studentId)
                 .orElseThrow(() -> new WalletNotFoundException("Wallet not found for student " + studentId));
     }

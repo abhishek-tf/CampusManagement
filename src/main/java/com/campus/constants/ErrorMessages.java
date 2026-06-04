@@ -12,11 +12,8 @@ public class ErrorMessages {
     public static final String STUDENT_ID_REQUIRED = "Student id is required";
     public static final String INSUFFICIENT_BALANCE = "Insufficient balance";
     public static final String INVALID_AMOUNT = "Invalid amount";
-    public static final String DAILY_LIMIT_EXCEEDED = "Daily limit exceeded";
-    public static final String FRAUD_DETECTED = "Fraudulent activity detected";
     public static final String INVALID_INPUT = "Invalid input";
     public static final String DATABASE_ERROR = "Database error occurred";
-    public static final String OPERATION_FAILED = "Operation failed";
 
     // Expense sharing
     public static final String GROUP_NOT_FOUND = "Expense group not found";

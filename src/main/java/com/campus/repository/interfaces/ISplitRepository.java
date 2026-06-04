@@ -20,8 +20,6 @@ public interface ISplitRepository {
 
     Optional<ExpenseSplits> findById(Connection conn, long splitId) throws SQLException;
 
-    List<ExpenseSplits> findByExpenseId(Connection conn, long expenseId) throws SQLException;
-
     /** All PENDING splits owed by a student, across every group. */
     List<ExpenseSplits> findPendingByDebtor(Connection conn, String debtorId) throws SQLException;
 

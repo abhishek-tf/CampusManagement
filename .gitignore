@@ -1,2 +1,20 @@
-CLAUDE.md
+# Build output
 target/
+
+# Logs
+logs/
+
+# Local DB credentials (commit db.properties.example instead)
+src/main/resources/db.properties
+
+
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+
+# Project preference (already ignored)
+CLAUDE.md

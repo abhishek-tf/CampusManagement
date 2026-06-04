@@ -48,20 +48,6 @@ public class ExpenseRepositoryImpl implements IExpenseRepository {
         }
     }
 
-    @Override
-    public List<ExpenseGroup> findAllGroups(Connection conn) throws SQLException {
-        String sql = "SELECT group_id, group_name, created_by, created_at "
-                + "FROM expense_group ORDER BY group_id";
-        List<ExpenseGroup> groups = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                groups.add(mapGroup(rs));
-            }
-        }
-        return groups;
-    }
-
     // --- group_member -----------------------------------------------------
 
     @Override

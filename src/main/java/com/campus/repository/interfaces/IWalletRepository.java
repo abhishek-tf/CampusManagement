@@ -3,7 +3,6 @@ package com.campus.repository.interfaces;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.List;
 import java.util.Optional;
 
 import com.campus.entity.Wallet;
@@ -26,8 +25,6 @@ public interface IWalletRepository {
 
     /** Same as {@link #findByStudentId} but locks the row ({@code FOR UPDATE}). */
     Optional<Wallet> findByStudentIdForUpdate(Connection conn, String studentId) throws SQLException;
-
-    List<Wallet> findAll(Connection conn) throws SQLException;
 
     /** Persists the mutable wallet state (balance, daily counter, updated_at). */
     void update(Connection conn, Wallet wallet) throws SQLException;

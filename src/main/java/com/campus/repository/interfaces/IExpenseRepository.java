@@ -27,8 +27,6 @@ public interface IExpenseRepository {
 
     Optional<ExpenseGroup> findGroupById(Connection conn, long groupId) throws SQLException;
 
-    List<ExpenseGroup> findAllGroups(Connection conn) throws SQLException;
-
     // --- group_member -----------------------------------------------------
 
     void addMember(Connection conn, GroupMember member) throws SQLException;
