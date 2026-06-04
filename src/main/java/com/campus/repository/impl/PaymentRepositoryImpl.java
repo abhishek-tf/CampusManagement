@@ -8,7 +8,6 @@ import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import com.campus.entity.CampusPayment;
 import com.campus.enums.PaymentCategory;
@@ -46,30 +45,11 @@ public class PaymentRepositoryImpl implements IPaymentRepository {
     }
 
     @Override
-    public Optional<CampusPayment> findById(Connection conn, long paymentId) throws SQLException {
-        String sql = "SELECT " + COLUMNS + " FROM campus_payment WHERE payment_id = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setLong(1, paymentId);
-            try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
-            }
-        }
-    }
-
-    @Override
     public List<CampusPayment> findByStudentId(Connection conn, String studentId) throws SQLException {
         String sql = "SELECT " + COLUMNS + " FROM campus_payment "
                 + "WHERE student_id = ? ORDER BY paid_at DESC";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, studentId);
-            return mapList(ps);
-        }
-    }
-
-    @Override
-    public List<CampusPayment> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT " + COLUMNS + " FROM campus_payment ORDER BY payment_id";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             return mapList(ps);
         }
     }

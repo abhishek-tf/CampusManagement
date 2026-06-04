@@ -9,39 +9,45 @@ import com.campus.entity.Transaction;
 import com.campus.exception.CampusPaymentException;
 import com.campus.service.interfaces.IReportService;
 import com.campus.service.interfaces.ITransactionService;
+import com.campus.util.Logger;
 
+/**
+ * Top-level console controller. Dispatches to one focused sub-menu per module
+ * (Single Responsibility) and obtains every service from {@link AppConfig} (the
+ * composition root), so this class wires nothing itself.
+ */
 public class MainMenu {
 
     private final Scanner scanner = new Scanner(System.in);
-    private final IReportService reportService;
-    private final ITransactionService transactionService;
-
-    public MainMenu(IReportService reportService, ITransactionService transactionService) {
-        this.reportService = reportService;
-        this.transactionService = transactionService;
-    }
+    private final IReportService reportService = AppConfig.getReportService();
+    private final ITransactionService transactionService = AppConfig.getTransactionService();
 
     public void start() {
         boolean running = true;
-
         while (running) {
             displayMenu();
             String choice = prompt("Enter choice: ");
             if (choice == null) {
                 break; // input stream ended
             }
-
-            switch (choice) {
-                case "1" -> handleStudentMenu();
-                case "2" -> handleWalletMenu();
-                case "3" -> handlePaymentMenu();
-                case "4" -> handleExpenseMenu();
-                case "5" -> handleReportsMenu();
-                case "6" -> {
-                    System.out.println("Exiting...");
-                    running = false;
+            try {
+                switch (choice) {
+                    case "1" -> new StudentMenu(AppConfig.getStudentService(), scanner).show();
+                    case "2" -> new WalletMenu(AppConfig.getWalletService(), scanner).show();
+                    case "3" -> new PaymentMenu(AppConfig.getPaymentService(), scanner).show();
+                    case "4" -> new ExpenseMenu(AppConfig.getExpenseService(), scanner).show();
+                    case "5" -> reportsMenu();
+                    case "6" -> {
+                        System.out.println("Exiting...");
+                        running = false;
+                    }
+                    default -> System.out.println("Invalid choice");
                 }
-                default -> System.out.println("Invalid choice");
+            } catch (RuntimeException e) {
+                // Safety net: an unexpected failure (e.g. database unreachable) must
+                // not crash the app — log it and return to the menu.
+                Logger.error("Menu operation failed", e);
+                System.out.println("Operation failed: " + e.getMessage());
             }
         }
         scanner.close();
@@ -52,118 +58,14 @@ public class MainMenu {
         System.out.println("1. Student Management");
         System.out.println("2. Wallet Management");
         System.out.println("3. Payment Management");
-        System.out.println("4. Expense Management");
+        System.out.println("4. Expense Sharing");
         System.out.println("5. Transaction History & Reports");
         System.out.println("6. Exit");
     }
 
-    private void handleStudentMenu() {
-        try {
-            new StudentMenu(AppConfig.getStudentService(), scanner).show();
-        } catch (IllegalStateException e) {
-            System.out.println("Student module unavailable: " + e.getMessage());
-        }
-    }
+    // --- Transaction history & reports (Java Streams) ---------------------
 
-    private void handleWalletMenu() {
-        System.out.println("\n--- Wallet Management ---");
-        System.out.println("1. Top Up");
-        System.out.println("2. Withdraw");
-        System.out.println("3. Transfer");
-        System.out.print("Choice: ");
-    }
-
-    private void handlePaymentMenu() {
-        System.out.println("\n--- Payment Management ---");
-        System.out.println("1. Process Payment");
-        System.out.println("2. View Payments");
-        System.out.print("Choice: ");
-
-        String choice = scanner.nextLine().trim();
-
-        switch (choice) {
-            case "1" -> processPayment();
-            case "2" -> viewPayments();
-            default -> System.out.println("Invalid choice");
-        }
-    }
-
-    private void processPayment() {
-        try {
-            System.out.print("Student ID: ");
-            String studentId = scanner.nextLine().trim();
-
-            System.out.println(
-                    "Categories: "
-                            + java.util.Arrays.toString(
-                                    PaymentCategory.values()));
-
-            System.out.print("Category: ");
-            String category = scanner.nextLine().trim();
-
-            System.out.print("Amount: ");
-            BigDecimal amount =
-                    new BigDecimal(scanner.nextLine().trim());
-
-            paymentService.processPayment(
-                    studentId,
-                    category,
-                    amount);
-
-            System.out.println("Payment successful.");
-
-        } catch (NumberFormatException e) {
-
-            System.out.println("Invalid amount.");
-
-        } catch (CampusPaymentException e) {
-
-            System.out.println(
-                    "Payment failed: " + e.getMessage());
-
-            Logger.warning(
-                    "Payment menu reported failure: "
-                            + e.getMessage());
-        }
-    }
-
-    private void viewPayments() {
-        try {
-            System.out.print("Student ID: ");
-            String studentId = scanner.nextLine().trim();
-
-            List<CampusPayment> payments =
-                    paymentService.getPaymentHistory(studentId);
-
-            if (payments.isEmpty()) {
-                System.out.println("No payments found.");
-                return;
-            }
-
-            payments.forEach(
-                    p -> System.out.printf(
-                            "#%d  %-13s  %s  (txn %d)  %s%n",
-                            p.getPaymentId(),
-                            p.getCategory(),
-                            p.getAmount(),
-                            p.getTxnId(),
-                            p.getPaidAt()));
-
-        } catch (CampusPaymentException e) {
-            System.out.println(
-                    "Could not load payments: "
-                            + e.getMessage());
-        }
-    }
-
-    private void handleExpenseMenu() {
-        System.out.println("\n--- Expense Management ---");
-        System.out.println("1. Create Group");
-        System.out.println("2. Split Expense");
-        System.out.print("Choice: ");
-    }
-
-    private void handleReportsMenu() {
+    private void reportsMenu() {
         boolean back = false;
         while (!back) {
             System.out.println("\n--- Transaction History & Reports ---");
@@ -178,11 +80,10 @@ public class MainMenu {
             if (choice == null) {
                 return;
             }
-
             switch (choice) {
                 case "1" -> recordTransaction();
                 case "2" -> viewWalletHistory();
-                case "3" -> showTotalSpend();
+                case "3" -> System.out.println("\nTotal Spend: " + reportService.getTotalSpend());
                 case "4" -> showTopSpenders();
                 case "5" -> showDepartmentWiseSpend();
                 case "6" -> showMonthlySummary();
@@ -203,8 +104,7 @@ public class MainMenu {
             return;
         }
         try {
-            BigDecimal amount = new BigDecimal(rawAmount.trim());
-            Transaction txn = transactionService.recordTransaction(walletId, type, amount);
+            Transaction txn = transactionService.recordTransaction(walletId, type, new BigDecimal(rawAmount.trim()));
             System.out.println("Recorded transaction #" + txn.getTxnId()
                     + " (" + txn.getTxnType() + " " + txn.getAmount() + ")");
         } catch (NumberFormatException e) {
@@ -233,10 +133,6 @@ public class MainMenu {
         }
     }
 
-    private void showTotalSpend() {
-        System.out.println("\nTotal Spend: " + reportService.getTotalSpend());
-    }
-
     private void showTopSpenders() {
         System.out.println("\nTop 5 Spenders:");
         reportService.getTopSpenders(5).forEach(s ->
@@ -252,15 +148,15 @@ public class MainMenu {
                         d.getDepartment(), d.getTotalSpent(), d.getTransactionCount()));
     }
 
-    private void 
-    showMonthlySummary() {
+    private void showMonthlySummary() {
         System.out.println("\nMonthly Summary:");
         reportService.getMonthlySummaries().forEach(m ->
                 System.out.printf("  %d-%02d - %s (%d txns)%n",
                         m.getYear(), m.getMonth(), m.getTotalSpent(), m.getTransactionCount()));
     }
 
-    /** Prompts for a wallet id; returns null if input is invalid or the stream ends. */
+    // --- shared input helpers ---------------------------------------------
+
     private Long readWalletId() {
         String raw = prompt("Enter wallet id: ");
         if (raw == null) {

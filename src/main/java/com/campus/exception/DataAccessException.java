@@ -9,7 +9,7 @@ package com.campus.exception;
  *       signatures — repositories don't need {@code throws SQLException} on every method, and
  *       unrelated callers (Fraud, Wallet, Student services) don't have to declare it. The
  *       service layer still catches it where it manages a transaction, to translate it into a
- *       business exception (PaymentProcessingException) and trigger rollback. Using a
+ *       business exception (CampusPaymentException) and trigger rollback. Using a
  *       business (checked) exception here would force throws-clauses across the whole codebase.
  * HOW:  Always constructed with the originating SQLException as the cause so the stack trace
  *       and SQL state are retained for diagnostics.</p>

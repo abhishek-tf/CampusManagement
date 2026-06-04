@@ -1,31 +1,39 @@
 package com.campus.config;
 
-import com.campus.repository.impl.StudentRepositoryImpl;
-import com.campus.repository.interfaces.IStudentRepository;
-import com.campus.service.impl.StudentServiceImpl;
-import com.campus.service.interfaces.IStudentService;
-
-import javax.sql.DataSource;
 import java.math.BigDecimal;
 
+import com.campus.repository.impl.ExpenseRepositoryImpl;
+import com.campus.repository.impl.PaymentRepositoryImpl;
+import com.campus.repository.impl.ReportRepositoryImpl;
+import com.campus.repository.impl.SplitRepositoryImpl;
+import com.campus.repository.impl.StudentRepositoryImpl;
+import com.campus.repository.impl.TransactionRepositoryImpl;
+import com.campus.repository.impl.WalletRepositoryImpl;
+import com.campus.repository.interfaces.IPaymentRepository;
+import com.campus.repository.interfaces.IWalletRepository;
+import com.campus.service.impl.ExpenseServiceImpl;
+import com.campus.service.impl.PaymentServiceImpl;
+import com.campus.service.impl.ReportServiceImpl;
+import com.campus.service.impl.StudentServiceImpl;
+import com.campus.service.impl.TransactionServiceImpl;
+import com.campus.service.impl.WalletServiceImpl;
+import com.campus.service.interfaces.IExpenseService;
+import com.campus.service.interfaces.IPaymentService;
+import com.campus.service.interfaces.IReportService;
+import com.campus.service.interfaces.IStudentService;
+import com.campus.service.interfaces.ITransactionService;
+import com.campus.service.interfaces.IWalletService;
+
 /**
- * Application configuration: app-wide constants + dependency wiring.
+ * Composition root: app-wide constants plus the single place that wires
+ * repositories into services via constructor injection (Dependency Inversion).
  *
- * WHY  : One composition root that builds repositories and services with
- *        constructor injection, so no class news-up its own dependencies.
- * HOW  : Lazily builds singletons from a DataSource. The wiring methods select
- *        the interface types (IStudentRepository/IStudentService) so callers
- *        stay decoupled from the implementations (Dependency Inversion).
- * USED BY : MainMenu / StudentMenu to obtain a ready IStudentService.
- *
- * DB CONNECTION SEAM:
- *   This class does NOT create database connections — that is owned by the
- *   DB-connection module (teammate). That module is expected to build the
- *   DataSource (from db.properties) and hand it in once at startup via
- *   {@link #configureDataSource(DataSource)}. Nothing here touches
- *   DriverManager or db.properties.
+ * <p>All repositories obtain JDBC connections from the shared
+ * {@link com.campus.util.DBConnection} factory (which reads db.properties), so
+ * there is one connection strategy across the whole app. Callers depend only on
+ * the service interfaces returned here, never on the implementations.</p>
  */
-public class AppConfig {
+public final class AppConfig {
 
     // --- App constants ---
     public static final BigDecimal WALLET_MAX_BALANCE = BigDecimal.valueOf(1000000);
@@ -33,41 +41,35 @@ public class AppConfig {
     public static final BigDecimal MIN_TRANSFER_AMOUNT = BigDecimal.valueOf(1);
     public static final BigDecimal MAX_TRANSFER_AMOUNT = BigDecimal.valueOf(500000);
 
-    public static final int FRAUD_DETECTION_THRESHOLD = 10;
-    public static final int FRAUD_TIME_WINDOW_MINUTES = 5;
-
     public static final String APP_NAME = "Campus Payment Platform";
     public static final String APP_VERSION = "1.0.0";
 
-    // --- Wiring state ---
-    private static DataSource dataSource;          // injected by the DB-connection module
-    private static IStudentService studentService; // lazily built singleton
-
-    private AppConfig() { }                        // no instances — static composition root
-
-    /**
-     * Entry point for the DB-connection module to supply the configured DataSource.
-     * Call once at startup, before any service is requested.
-     */
-    public static void configureDataSource(DataSource configuredDataSource) {
-        dataSource = configuredDataSource;
+    private AppConfig() {
     }
 
-    /**
-     * @return the wired student service (built once, reused thereafter).
-     * @throws IllegalStateException if the DataSource has not been configured yet
-     *         — a setup error, signalling the DB-connection module ran too late.
-     */
     public static IStudentService getStudentService() {
-        if (studentService == null) {
-            if (dataSource == null) {
-                throw new IllegalStateException(
-                        "DataSource not configured — the DB-connection module must call "
-                                + "AppConfig.configureDataSource(...) at startup.");
-            }
-            IStudentRepository studentRepository = new StudentRepositoryImpl(dataSource);
-            studentService = new StudentServiceImpl(studentRepository);
-        }
-        return studentService;
+        return new StudentServiceImpl(new StudentRepositoryImpl());
+    }
+
+    public static IWalletService getWalletService() {
+        return new WalletServiceImpl(new WalletRepositoryImpl());
+    }
+
+    public static IPaymentService getPaymentService() {
+        IPaymentRepository paymentRepository = new PaymentRepositoryImpl();
+        IWalletRepository walletRepository = new WalletRepositoryImpl();
+        return new PaymentServiceImpl(paymentRepository, walletRepository);
+    }
+
+    public static IExpenseService getExpenseService() {
+        return new ExpenseServiceImpl(new ExpenseRepositoryImpl(), new SplitRepositoryImpl());
+    }
+
+    public static IReportService getReportService() {
+        return new ReportServiceImpl(new ReportRepositoryImpl());
+    }
+
+    public static ITransactionService getTransactionService() {
+        return new TransactionServiceImpl(new TransactionRepositoryImpl());
     }
 }

@@ -12,9 +12,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.campus.constants.ErrorMessages;
 import com.campus.entity.ExpenseGroup;
 import com.campus.entity.ExpenseSplits;
@@ -30,7 +27,8 @@ import com.campus.repository.interfaces.IExpenseRepository;
 import com.campus.repository.interfaces.IExpenseRepository.WalletRow;
 import com.campus.repository.interfaces.ISplitRepository;
 import com.campus.service.interfaces.IExpenseService;
-import com.campus.util.DBConnection;
+import com.campus.util.Logger;
+import com.campus.util.Tx;
 
 /**
  * Business logic for Splitwise-style expense sharing.
@@ -40,8 +38,6 @@ import com.campus.util.DBConnection;
  * entirely. SQL is delegated to the repositories.</p>
  */
 public class ExpenseServiceImpl implements IExpenseService {
-
-    private static final Logger log = LoggerFactory.getLogger(ExpenseServiceImpl.class);
 
     private static final BigDecimal ONE_CENT = new BigDecimal("0.01");
     private static final BigDecimal HUNDRED = new BigDecimal("100");
@@ -60,7 +56,7 @@ public class ExpenseServiceImpl implements IExpenseService {
         requireText(groupName, "Group name is required");
         requireStudentId(createdBy);
 
-        return executeInTransaction(conn -> {
+        return Tx.inTransaction(conn -> {
             ExpenseGroup group = ExpenseGroup.builder()
                     .groupName(groupName.trim())
                     .createdBy(createdBy)
@@ -73,7 +69,7 @@ public class ExpenseServiceImpl implements IExpenseService {
                     .studentId(createdBy)
                     .build());
 
-            log.info("Created expense group {} ('{}') by student {}", groupId, groupName, createdBy);
+            Logger.info("Created expense group " + groupId + " ('" + groupName + "') by student " + createdBy);
             return groupId;
         });
     }
@@ -82,7 +78,7 @@ public class ExpenseServiceImpl implements IExpenseService {
     public void addMember(long groupId, String studentId) throws CampusPaymentException {
         requireStudentId(studentId);
 
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             requireGroup(conn, groupId);
             if (expenseRepository.isMember(conn, groupId, studentId)) {
                 throw new CampusPaymentException("Student is already a member of this group");
@@ -91,7 +87,7 @@ public class ExpenseServiceImpl implements IExpenseService {
                     .groupId(groupId)
                     .studentId(studentId)
                     .build());
-            log.info("Added student {} to group {}", studentId, groupId);
+            Logger.info("Added student " + studentId + " to group " + groupId);
             return null;
         });
     }
@@ -107,7 +103,7 @@ public class ExpenseServiceImpl implements IExpenseService {
         }
         BigDecimal total = totalAmount.setScale(2, RoundingMode.HALF_UP);
 
-        return executeInTransaction(conn -> {
+        return Tx.inTransaction(conn -> {
             requireGroup(conn, groupId);
             List<GroupMember> members = expenseRepository.findMembersByGroupId(conn, groupId);
             Set<String> memberIds = members.stream()
@@ -129,8 +125,8 @@ public class ExpenseServiceImpl implements IExpenseService {
 
             persistSplits(conn, expenseId, paidBy, lines);
 
-            log.info("Recorded expense {} of {} in group {} paid by {} ({} split, {} participants)",
-                    expenseId, total, groupId, paidBy, splitType, lines.size());
+            Logger.info("Recorded expense " + expenseId + " of " + total + " in group " + groupId
+                    + " paid by " + paidBy + " (" + splitType + " split, " + lines.size() + " participants)");
             return expenseId;
         });
     }
@@ -138,12 +134,12 @@ public class ExpenseServiceImpl implements IExpenseService {
     @Override
     public List<ExpenseSplits> getPendingDues(String studentId) throws CampusPaymentException {
         requireStudentId(studentId);
-        return executeInTransaction(conn -> splitRepository.findPendingByDebtor(conn, studentId));
+        return Tx.inTransaction(conn -> splitRepository.findPendingByDebtor(conn, studentId));
     }
 
     @Override
     public void settleSplit(long splitId) throws CampusPaymentException {
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             ExpenseSplits split = splitRepository.findById(conn, splitId)
                     .orElseThrow(() -> new CampusPaymentException(ErrorMessages.SPLIT_NOT_FOUND));
             if (split.getStatus() == SettlementStatus.SETTLED) {
@@ -179,15 +175,15 @@ public class ExpenseServiceImpl implements IExpenseService {
             expenseRepository.adjustWalletBalance(conn, creditorWallet.walletId(), amount);
             splitRepository.markSettled(conn, splitId, txnId, LocalDateTime.now());
 
-            log.info("Settled split {}: {} paid {} to {} (txn {})",
-                    splitId, debtor, amount, creditor, txnId);
+            Logger.audit("Settled split " + splitId + ": " + debtor + " paid " + amount
+                    + " to " + creditor + " (txn " + txnId + ")");
             return null;
         });
     }
 
     @Override
     public Map<String, BigDecimal> getGroupNetBalances(long groupId) throws CampusPaymentException {
-        return executeInTransaction(conn -> {
+        return Tx.inTransaction(conn -> {
             requireGroup(conn, groupId);
             List<GroupMember> members = expenseRepository.findMembersByGroupId(conn, groupId);
             List<GroupExpense> expenses = expenseRepository.findExpensesByGroupId(conn, groupId);
@@ -315,37 +311,7 @@ public class ExpenseServiceImpl implements IExpenseService {
         }
     }
 
-    // --- transaction template & validation --------------------------------
-
-    @FunctionalInterface
-    private interface ConnectionWork<T> {
-        T apply(Connection conn) throws SQLException, CampusPaymentException;
-    }
-
-    /**
-     * Runs {@code work} inside a single JDBC transaction. Commits on success,
-     * rolls back on any failure, and translates SQL errors into a
-     * {@link CampusPaymentException} after logging them.
-     */
-    private <T> T executeInTransaction(ConnectionWork<T> work) throws CampusPaymentException {
-        try (Connection conn = DBConnection.getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                T result = work.apply(conn);
-                conn.commit();
-                return result;
-            } catch (SQLException | CampusPaymentException | RuntimeException e) {
-                conn.rollback();
-                throw e;
-            }
-        } catch (CampusPaymentException e) {
-            log.error("Expense operation failed: {}", e.getMessage());
-            throw e;
-        } catch (SQLException e) {
-            log.error("Database error during expense operation", e);
-            throw new CampusPaymentException(ErrorMessages.DATABASE_ERROR, e);
-        }
-    }
+    // --- validation helpers ------------------------------------------------
 
     private void requireGroup(Connection conn, long groupId) throws SQLException, CampusPaymentException {
         if (expenseRepository.findGroupById(conn, groupId).isEmpty()) {

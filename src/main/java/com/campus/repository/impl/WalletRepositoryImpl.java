@@ -9,8 +9,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 
 import com.campus.entity.Wallet;
@@ -74,19 +72,6 @@ public class WalletRepositoryImpl implements IWalletRepository {
                 return rs.next() ? Optional.of(mapRow(rs)) : Optional.empty();
             }
         }
-    }
-
-    @Override
-    public List<Wallet> findAll(Connection conn) throws SQLException {
-        String sql = "SELECT " + COLUMNS + " FROM wallet ORDER BY wallet_id";
-        List<Wallet> wallets = new ArrayList<>();
-        try (PreparedStatement ps = conn.prepareStatement(sql);
-             ResultSet rs = ps.executeQuery()) {
-            while (rs.next()) {
-                wallets.add(mapRow(rs));
-            }
-        }
-        return wallets;
     }
 
     @Override

@@ -12,40 +12,52 @@ import com.campus.exception.WalletNotFoundException;
 import com.campus.repository.interfaces.IPaymentRepository;
 import com.campus.repository.interfaces.IWalletRepository;
 import com.campus.service.interfaces.IPaymentService;
-import com.campus.util.DBConnection;
+import com.campus.service.interfaces.PaymentProcessor;
+import com.campus.util.Logger;
+import com.campus.util.Tx;
 import com.campus.util.ValidationUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Business logic for campus payments, persisted to MySQL via JDBC.
  *
- * <p>A payment is a single atomic transaction: it debits the wallet, writes the
- * parent {@code transaction} row (txn_type = PAYMENT) and the {@code campus_payment}
- * detail - all committing together or rolling back entirely.</p>
+ * <p>A payment is a single atomic transaction (via {@link Tx}): it debits the
+ * wallet, writes the parent {@code transaction} row (txn_type = PAYMENT) and the
+ * {@code campus_payment} detail - all committing together or rolling back.</p>
  *
- * <p>It depends on {@link IWalletRepository} for the wallet/transaction writes and
- * {@link IPaymentRepository} for the payment detail (the {@code wallet} and
- * {@code transaction} tables are owned by the wallet repository).</p>
+ * <p>The per-category processing behaviour is modelled with the
+ * {@link PaymentProcessor} functional interface and registered once in an
+ * {@link EnumMap}; dispatch is a single map lookup (open for extension - add a
+ * category, register a lambda - with no switch to edit).</p>
  */
 public class PaymentServiceImpl implements IPaymentService {
-
-    private static final Logger log = LoggerFactory.getLogger(PaymentServiceImpl.class);
 
     private static final String TXN_PAYMENT = "PAYMENT";
 
     private final IPaymentRepository paymentRepository;
     private final IWalletRepository walletRepository;
+    private final Map<PaymentCategory, PaymentProcessor> processors;
 
     public PaymentServiceImpl(IPaymentRepository paymentRepository,
                               IWalletRepository walletRepository) {
         this.paymentRepository = paymentRepository;
         this.walletRepository = walletRepository;
+        this.processors = buildProcessors();
+    }
+
+    /** Registers one payment-processing strategy (a lambda) per category. */
+    private Map<PaymentCategory, PaymentProcessor> buildProcessors() {
+        Map<PaymentCategory, PaymentProcessor> map = new EnumMap<>(PaymentCategory.class);
+        for (PaymentCategory category : PaymentCategory.values()) {
+            map.put(category, (conn, wallet, amount) -> recordPayment(conn, wallet, category, amount));
+        }
+        return map;
     }
 
     @Override
@@ -58,33 +70,22 @@ public class PaymentServiceImpl implements IPaymentService {
             throw new InvalidAmountException("Invalid payment amount");
         }
         PaymentCategory paymentCategory = parseCategory(category);
+        PaymentProcessor processor = processors.get(paymentCategory);
 
-        executeInTransaction(conn -> {
+        Tx.inTransaction(conn -> {
             Wallet wallet = walletRepository.findByStudentIdForUpdate(conn, studentId)
                     .orElseThrow(() -> new WalletNotFoundException(
                             "Wallet not found for student " + studentId));
 
             if (wallet.getBalance().compareTo(amount) < 0) {
-                log.warn("Payment rejected (insufficient funds): studentId={} amount={} balance={}",
-                        studentId, amount, wallet.getBalance());
+                Logger.paymentFailure("studentId=" + studentId + " category=" + paymentCategory
+                        + " amount=" + amount + " (insufficient funds)");
                 throw new InsufficientBalanceException("Insufficient balance for payment");
             }
 
-            // Debit the wallet, record the PAYMENT transaction, then the payment detail.
-            wallet.setBalance(wallet.getBalance().subtract(amount));
-            walletRepository.update(conn, wallet);
-            long txnId = walletRepository.insertTransaction(conn, wallet.getWalletId(), TXN_PAYMENT, amount);
-
-            CampusPayment payment = CampusPayment.builder()
-                    .txnId(txnId)
-                    .studentId(studentId)
-                    .category(paymentCategory)
-                    .amount(amount)
-                    .build();
-            paymentRepository.save(conn, payment);
-
-            log.info("Payment success: studentId={} category={} amount={} txnId={}",
-                    studentId, paymentCategory, amount, txnId);
+            long txnId = processor.process(conn, wallet, amount);
+            Logger.audit("Payment: studentId=" + studentId + " category=" + paymentCategory
+                    + " amount=" + amount + " txnId=" + txnId);
             return null;
         });
     }
@@ -94,34 +95,30 @@ public class PaymentServiceImpl implements IPaymentService {
         if (!ValidationUtil.isValidStudentId(studentId)) {
             throw new InvalidInputException("Invalid student id");
         }
-        return executeInTransaction(conn -> paymentRepository.findByStudentId(conn, studentId));
+        return Tx.inTransaction(conn -> paymentRepository.findByStudentId(conn, studentId));
     }
 
-    // ----------------------------------------------------------------------
-    // Transaction template & helpers
-    // ----------------------------------------------------------------------
+    /**
+     * The work shared by every category strategy: debit the (locked) wallet,
+     * record the PAYMENT transaction, then the campus_payment detail. Runs inside
+     * the caller's transaction so the whole payment is atomic.
+     */
+    private long recordPayment(Connection conn, Wallet wallet, PaymentCategory category, BigDecimal amount)
+            throws CampusPaymentException {
+        try {
+            wallet.setBalance(wallet.getBalance().subtract(amount));
+            walletRepository.update(conn, wallet);
+            long txnId = walletRepository.insertTransaction(conn, wallet.getWalletId(), TXN_PAYMENT, amount);
 
-    @FunctionalInterface
-    private interface ConnectionWork<T> {
-        T apply(Connection conn) throws SQLException, CampusPaymentException;
-    }
-
-    /** Runs {@code work} in one JDBC transaction: commit on success, rollback on failure. */
-    private <T> T executeInTransaction(ConnectionWork<T> work) throws CampusPaymentException {
-        try (Connection conn = DBConnection.getConnection()) {
-            conn.setAutoCommit(false);
-            try {
-                T result = work.apply(conn);
-                conn.commit();
-                return result;
-            } catch (SQLException | CampusPaymentException | RuntimeException e) {
-                conn.rollback();
-                throw e;
-            }
-        } catch (CampusPaymentException e) {
-            throw e;
+            CampusPayment payment = CampusPayment.builder()
+                    .txnId(txnId)
+                    .studentId(wallet.getStudentId())
+                    .category(category)
+                    .amount(amount)
+                    .build();
+            paymentRepository.save(conn, payment);
+            return txnId;
         } catch (SQLException e) {
-            log.error("Database error during payment operation", e);
             throw new CampusPaymentException(ErrorMessages.DATABASE_ERROR, e);
         }
     }
